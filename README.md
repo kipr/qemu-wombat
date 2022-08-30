@@ -56,7 +56,7 @@ sudo qemu-system-arm \
 
 10. Start up the image again and then, in the terminal on the image, run fdisk to recreate the second partition
 
-'sudo fdisk /dev/sda`
+`sudo fdisk /dev/sda`
 
 11. In fdisk, run these commands:
 
