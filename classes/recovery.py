@@ -1,3 +1,4 @@
+from imaplib import Commands
 from multiprocessing.connection import wait
 from operator import concat
 import subprocess
@@ -27,17 +28,16 @@ class Pass:
     self.drive = kwargs.get('drive', None)
     self.serial_tcp_port = serial_tcp_port
     self.root = ConnectRoot(self.serial_tcp_port)
+    self.root.serial_tcp()
+    self.root.listen()
   
   def __str__(self) -> str:
     return f'Kernel: {self.kernel}, DTB: {self.dtb}, Drive: {self.drive}, Serial TCP Port: {self.serial_tcp_port}'
 
   def run(self):
-    self.root.serial_tcp()
     self.do_pass()
 
   def do_pass(self):
-    self.root.listen()
-
     print(f'Starting Raspberry Pi OS in recovery mode...')
     p = subprocess.Popen([
       'qemu-system-aarch64',
@@ -58,7 +58,7 @@ class Pass:
     print(f'QEMU started, waiting for prompt...')
     self.root.wait_for_prompt()
 
-    print(f'Prompt found, ready for commands...')
-    
+    print('Prompt found, ready for commands...')
+
     self.root.send_bulk(self.commands)
     self.root.send('exit')

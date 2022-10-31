@@ -12,9 +12,11 @@ Can be used to connect to a serial port and then listen and send commands to a r
 class ConnectRoot:
 
   _MAX_PORT_ = 65535
+  prev2_buffer = ''
   prev_buffer = ''
   curr_buffer = ''
   root_string = 'root@(none):/# '
+  first_root = False
 
   def __init__(self, serial_tcp_port = 4444):
     if serial_tcp_port > self._MAX_PORT_:
@@ -46,17 +48,28 @@ class ConnectRoot:
         time.sleep(0.5)
         continue
 
+      self.prev2_buffer = self.prev_buffer
       self.prev_buffer = self.curr_buffer
       self.curr_buffer = self.receive()
-      buf = self.prev_buffer + self.curr_buffer
+      if 'cam-dummy-reg: disabling' in self.curr_buffer:
+        print('Ignoring buffer... cam-dummy')
+        self.curr_buffer = ''
+      if 'Timeout waiting for hardware interrupt.' in self.curr_buffer:
+        print('Ignoring buffer... timeout')
+        self.curr_buffer = ''
+      buf = self.prev2_buffer + self.prev_buffer + self.curr_buffer
       if self.root_string in buf:
+        if self.first_root == False:
+          time.sleep(10)
+          self.first_root = True
         time.sleep(1)
+        print('Root found!')
         break
       
   def send(self, data):
     if data == 'exit':
       time.sleep(1)
-      print('\n Exiting...')
+      print('\nExiting...')
       self.conn.close()
       return
     

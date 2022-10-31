@@ -156,7 +156,18 @@ subprocess.run([
 # Create recovery image
 print('Creating recovery image...')
 
+#Test commands
+commands = [
+  'git --version',
+  'python3 --version',
+  'git --version',
+  'python3 --version',
+  'git --version',
+  'ifconfig',
+]
+
 recovery = Pass(
+  commands,
   kernel = firmware_path / 'boot' / 'kernel8.img',
   dtb = firmware_path / 'boot' / 'bcm2710-rpi-3-b.dtb',
   drive = f'format=qcow2,file={snapshot_path}'
