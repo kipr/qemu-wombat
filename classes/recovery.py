@@ -1,15 +1,8 @@
 from imaplib import Commands
-from multiprocessing.connection import wait
-from operator import concat
 import subprocess
-import socket
-import time
-import fcntl
-import os
-import errno
-import sys
-import select
-from classes.connectRoot import ConnectRoot
+from classes.command import Command
+from classes.commandList import CommandList
+from classes.qemuSocket import QemuSocket
 
 class Pass:
   """
@@ -21,13 +14,13 @@ class Pass:
   prev_buffer = ''
   curr_buffer = ''
 
-  def __init__(self, commands, serial_tcp_port = 4444, **kwargs):
+  def __init__(self, commands: CommandList = None, serial_tcp_port = 4444, **kwargs):
     self.commands = commands
     self.kernel = kwargs.get('kernel', None)
     self.dtb = kwargs.get('dtb', None)
     self.drive = kwargs.get('drive', None)
     self.serial_tcp_port = serial_tcp_port
-    self.root = ConnectRoot(self.serial_tcp_port)
+    self.root = QemuSocket(self.serial_tcp_port)
     self.root.serial_tcp()
     self.root.listen()
   
@@ -51,14 +44,12 @@ class Pass:
       '-serial', f'tcp:127.0.0.1:{self.serial_tcp_port},nodelay',
     ])
 
-    print(f'Waiting for QEMU to start...')
+    print('Waiting for QEMU to start...')
 
     self.root.accept()
 
-    print(f'QEMU started, waiting for prompt...')
+    print('QEMU started, waiting for prompt...')
     self.root.wait_for_prompt()
-
-    print('Prompt found, ready for commands...')
-
-    self.root.send_bulk(self.commands)
-    self.root.send('exit')
+    if self.commands != None:
+      self.root.send_bulk(self.commands)
+    self.root.send(Command('exit'))

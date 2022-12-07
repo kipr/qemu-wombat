@@ -8,4 +8,4 @@ sudo qemu-system-aarch64 \
   -drive "format=qcow2,file=build/snapshot.qcow2" \
   -append "console=ttyAMA0 root=/dev/mmcblk0p2 rw rootwait rootfstype=ext4 init=/bin/bash" \
   -display 'none' \
-  -serial stdio tcp:127.0.0.1:4444
+  -serial stdio tcp:127.0.0.1:4444,nodelay

@@ -1,5 +1,13 @@
 <h1>Creating a Virtual Wombat Image</h1>
 
+<h2>Using the Build Script</h2>
+
+```
+python3 build.py
+```
+
+<h2> Manually Building the Image</h2>
+
 <h3>Resources:</h3>
 
 https://1xv447d.257.cz/posts/2022-04-29-raspbian-emulation-in-qemu

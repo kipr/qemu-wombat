@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import urllib.request
 import tarfile
@@ -7,7 +8,9 @@ from tempfile import mktemp
 from pathlib import Path
 import socket
 import time
+from classes.commandList import CommandList
 from classes.recovery import Pass
+from classes.command import Command
 
 
 # FIRMWARE_VERSION = '1.20210108'
@@ -30,19 +33,6 @@ if not firmware_path.exists():
 
 if not boot_path.exists():
   boot_path.mkdir()
-
-#   tmp_file = mktemp('.tar.gz')
-
-#   print(f'Downloading firmware {FIRMWARE_VERSION}...')
-#   urllib.request.urlretrieve(
-#     f'https://github.com/raspberrypi/firmware/archive/refs/tags/{FIRMWARE_VERSION}.tar.gz',
-#     tmp_file
-#   )
-#   print(f'Extracting firmware {FIRMWARE_VERSION}...')
-#   with tarfile.open(tmp_file) as tar:
-#     tar.extractall(path = firmware_path.parent)
-# else:
-#   print(f'Firmware {FIRMWARE_VERSION} already downloaded')
 
 if not Path(raspi_os_image_path).exists():
   tmp_file = mktemp('.img.xz')
@@ -156,15 +146,28 @@ subprocess.run([
 # Create recovery image
 print('Creating recovery image...')
 
-#Test commands
-commands = [
-  'git --version',
-  'python3 --version',
-  'git --version',
-  'python3 --version',
-  'git --version',
-  'ifconfig',
-]
+#Resize partition
+
+commands = CommandList()
+commands.append(Command('python3 --version', 'Python 3'))
+commands.append(Command('fdisk /dev/mmcblk0','Command (m for help)', 'Command (m for help): '))
+
+def print_fdisk_parse(buffer: str):
+  locator = 'mmcblk0p2'
+  return re.search('\d+', buffer[(buffer.index(locator) + len(locator)):])[0]
+
+commands.append(Command('print', '/dev/mmcblk0p2 ', 'Command (m for help): ', 'partition2_start', print_fdisk_parse))
+commands.append(Command('d', 'Partition number (1,2, default 2):', 'Partition number (1,2, default 2): '))
+commands.append(Command('2', 'Partition 2 has been deleted.', 'Command (m for help): '))
+commands.append(Command('n', 'Partition type', 'Select (default p): '))
+commands.append(Command('p', 'Partition number (2-4, default 2):', 'Partition number (2-4, default 2): '))
+commands.append(Command('2', 'First sector', 'First sector (2048-16777215, default 2048): '))
+commands.append(Command('', 'Last sector', 'default 16777215): ', store_used='partition2_start'))
+commands.append(Command('', 'remove the signature', '[Y]es/[N]o: '))
+commands.append(Command('n', 'Command (m for help):', 'Command (m for help): '))
+commands.append(Command('w', 'The partition table has been altered.'))
+commands.append(Command('resize2fs /dev/mmcblk0p2', 'resize2fs 1'))
+commands.append(Command('df -h'))
 
 recovery = Pass(
   commands,

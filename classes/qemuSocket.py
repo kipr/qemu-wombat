@@ -4,19 +4,20 @@ import fcntl
 import os
 import select
 from operator import concat
+from classes.command import Command
+from classes.commandList import CommandList
 
 """
 Can be used to connect to a serial port and then listen and send commands to a root terminal instance on the serial port.
 """
 
-class ConnectRoot:
+class QemuSocket:
 
   _MAX_PORT_ = 65535
-  prev2_buffer = ''
-  prev_buffer = ''
   curr_buffer = ''
+  len_buffer = ''
   root_string = 'root@(none):/# '
-  first_root = False
+  alt_wait_string = ''
 
   def __init__(self, serial_tcp_port = 4444):
     if serial_tcp_port > self._MAX_PORT_:
@@ -37,7 +38,7 @@ class ConnectRoot:
     fcntl.fcntl(self.conn, fcntl.F_SETFL, os.O_NONBLOCK)
 
   def receive(self):
-    buf = self.conn.recv(1024).decode('utf-8')
+    buf = self.conn.recv(1024).decode('utf-8', 'ignore')
     print(buf, end = "")
     return buf
 
@@ -47,38 +48,37 @@ class ConnectRoot:
       if not r:
         time.sleep(0.5)
         continue
-
-      self.prev2_buffer = self.prev_buffer
-      self.prev_buffer = self.curr_buffer
-      self.curr_buffer = self.receive()
-      if 'cam-dummy-reg: disabling' in self.curr_buffer:
-        print('Ignoring buffer... cam-dummy')
-        self.curr_buffer = ''
-      if 'Timeout waiting for hardware interrupt.' in self.curr_buffer:
-        print('Ignoring buffer... timeout')
-        self.curr_buffer = ''
-      buf = self.prev2_buffer + self.prev_buffer + self.curr_buffer
-      if self.root_string in buf:
-        if self.first_root == False:
-          time.sleep(10)
-          self.first_root = True
+      buf = self.receive()
+      self.curr_buffer = concat(self.curr_buffer,buf)
+      wait_string = self.root_string if self.alt_wait_string == '' else self.alt_wait_string
+      self.len_buffer = (self.len_buffer + buf)[-len(wait_string):]
+      if self.len_buffer == wait_string:
         time.sleep(1)
-        print('Root found!')
         break
       
-  def send(self, data):
-    if data == 'exit':
+  def send(self, command: Command):
+    command_str = command.command
+    if command_str == 'exit':
       time.sleep(1)
       print('\nExiting...')
       self.conn.close()
       return
     
-    self.conn.send(data.encode('utf-8'))
+    if command.alt_wait_string != '':
+      self.alt_wait_string = command.alt_wait_string
+
+    self.conn.send(command_str.encode('utf-8'))
     self.conn.send(b'\r')
     self.wait_for_prompt()
+    if command.validate(self.curr_buffer) == False:
+      raise ValueError(f'Command {command_str} failed to validate')
+    command.buffer = self.curr_buffer
+    self.curr_buffer = ''
+    self.alt_wait_string = ''
 
-  def send_bulk(self, data):
-    for line in data:
-      self.send(line)
-
-    
+  def send_bulk(self, data: CommandList):
+    for command in data:
+      self.send(command)
+      if command.buffer != '' and command.buf_func != None:
+        data.store[command.name] = command.buf_func(command.buffer)
+        data.get_store_update()
