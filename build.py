@@ -20,6 +20,7 @@ boot_mount_path = Path('/mnt/raspbian_boot')
 firmware_path = build_path / 'firmware'
 boot_path = firmware_path / 'boot'
 raspi_os_image_path = build_path / '2022-09-22-raspios-bullseye-arm64.img'
+master_os_path = build_path / 'master_os.img'
 
 # Create if file paths exist
 if not build_path.exists():
@@ -56,6 +57,15 @@ if not Path(raspi_os_image_path).exists():
 else:
   print(f'Raspberry Pi OS already downloaded')
 
+if master_os_path.exists():
+  master_os_path.unlink()
+
+subprocess.run([
+  'cp',
+  raspi_os_image_path,
+  master_os_path
+], check = True)
+
 # Mount partitions
 print("Mounting partitions...")
 loop_num = subprocess.run(
@@ -64,7 +74,7 @@ loop_num = subprocess.run(
         '--show',
         '--find',
         '--partscan',
-        f'{raspi_os_image_path}'
+        f'{master_os_path}'
     ],
     check=True,
     capture_output=True
@@ -125,16 +135,14 @@ snapshot_path = build_path / 'snapshot.qcow2'
 if snapshot_path.exists():
   snapshot_path.unlink()
 
-print(f'Creating snapshot...')
 subprocess.run([
   'qemu-img',
-  'create',
-  '-f', 'qcow2',
-  '-F', 'raw',
-  '-b', raspi_os_image_path,
+  'convert',
+  '-f', 'raw',
+  '-O', 'qcow2',
+  master_os_path,
   snapshot_path,
 ], check = True)
-
 
 subprocess.run([
   'qemu-img',
@@ -143,37 +151,74 @@ subprocess.run([
   '8G'
 ], check = True)
 
+subprocess.run([
+  'qemu-img',
+  'info',
+  snapshot_path
+], check = True)
+
 # Create recovery image
 print('Creating recovery image...')
 
 #Resize partition
 
-commands = CommandList()
-commands.append(Command('python3 --version', 'Python 3'))
-commands.append(Command('fdisk /dev/mmcblk0','Command (m for help)', 'Command (m for help): '))
+recovery_commands = CommandList()
+recovery_commands.append(Command('fdisk /dev/mmcblk0','Command (m for help)', 'Command (m for help): '))
 
 def print_fdisk_parse(buffer: str):
   locator = 'mmcblk0p2'
   return re.search('\d+', buffer[(buffer.index(locator) + len(locator)):])[0]
 
-commands.append(Command('print', '/dev/mmcblk0p2 ', 'Command (m for help): ', 'partition2_start', print_fdisk_parse))
-commands.append(Command('d', 'Partition number (1,2, default 2):', 'Partition number (1,2, default 2): '))
-commands.append(Command('2', 'Partition 2 has been deleted.', 'Command (m for help): '))
-commands.append(Command('n', 'Partition type', 'Select (default p): '))
-commands.append(Command('p', 'Partition number (2-4, default 2):', 'Partition number (2-4, default 2): '))
-commands.append(Command('2', 'First sector', 'First sector (2048-16777215, default 2048): '))
-commands.append(Command('', 'Last sector', 'default 16777215): ', store_used='partition2_start'))
-commands.append(Command('', 'remove the signature', '[Y]es/[N]o: '))
-commands.append(Command('n', 'Command (m for help):', 'Command (m for help): '))
-commands.append(Command('w', 'The partition table has been altered.'))
-commands.append(Command('resize2fs /dev/mmcblk0p2', 'resize2fs 1'))
-commands.append(Command('df -h'))
+recovery_commands.append(Command('print', '/dev/mmcblk0p2 ', 'Command (m for help): ', 'partition2_start', print_fdisk_parse))
+recovery_commands.append(Command('d', 'Partition number (1,2, default 2):', 'Partition number (1,2, default 2): '))
+recovery_commands.append(Command('2', 'Partition 2 has been deleted.', 'Command (m for help): '))
+recovery_commands.append(Command('n', 'Partition type', 'Select (default p): '))
+recovery_commands.append(Command('p', 'Partition number (2-4, default 2):', 'Partition number (2-4, default 2): '))
+recovery_commands.append(Command('2', 'First sector', 'First sector (2048-16777215, default 2048): '))
+recovery_commands.append(Command('', 'Last sector', 'default 16777215): ', store_used='partition2_start'))
+recovery_commands.append(Command('15309209', 'remove the signature', '[Y]es/[N]o: '))
+recovery_commands.append(Command('n', 'Command (m for help):', 'Command (m for help): '))
+recovery_commands.append(Command('w', 'The partition table has been altered.'))
+recovery_commands.append(Command('resize2fs /dev/mmcblk0p2'))
 
 recovery = Pass(
-  commands,
+  recovery_commands,
   kernel = firmware_path / 'boot' / 'kernel8.img',
   dtb = firmware_path / 'boot' / 'bcm2710-rpi-3-b.dtb',
   drive = f'format=qcow2,file={snapshot_path}'
 )
 
 recovery.run()
+
+# Remove old master image
+print('Removing old master...')
+subprocess.run([
+  'rm',
+  master_os_path
+], check = True)
+
+subprocess.run([
+  'qemu-img',
+  'convert',
+  '-f', 'qcow2',
+  '-O', 'raw',
+  snapshot_path,
+  master_os_path,
+], check = True)
+
+# Remove snapshot
+print('Removing snapshot...')
+subprocess.run([
+  'rm',
+  snapshot_path
+], check = True)
+
+# Shrink image
+print('Shrinking image...')
+subprocess.run([
+  'qemu-img',
+  'resize',
+  master_os_path,
+  '--shrink',
+  '7G'
+], check = True)

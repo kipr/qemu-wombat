@@ -3,22 +3,22 @@
 <h2>Using the Build Script</h2>
 
 ```
-python3 build.py
+sudo apt-get install qemu-system-arm
+```
+
+```
+sudo python3 build.py
 ```
 
 <h2> Manually Building the Image</h2>
-
-<h3>Resources:</h3>
-
-https://1xv447d.257.cz/posts/2022-04-29-raspbian-emulation-in-qemu
 
 <h3>Raspberrry Pi OS Downloads:</h3>
 
 https://www.raspberrypi.com/software/operating-systems/
 
-https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2022-09-07/2022-09-06-raspios-bullseye-arm64-lite.img.xz
+https://downloads.raspberrypi.org/raspios_arm64/images/raspios_arm64-2022-09-26/2022-09-22-raspios-bullseye-arm64.img.xz
 
-<h2>Building the image from scratch:</h2>
+<h3>Building the image from scratch:</h3>
 
 1. Install QEMU system emulation binaries for ARM processors
 
@@ -29,21 +29,21 @@ sudo apt-get install qemu-system-arm
 2. Create new folder
 
 ```
-mkdir Wombat-Bullseye
+mkdir qemu-wombat
 ```
 
-3. Download Pi Image with desktop and unzip to Wombat-Bullseye
+3. Download Pi Image with desktop and unzip to qemu-wombat folder
 
-4. Change image name to Wombat-Bullseye
+4. Change image name to master_os
 
 ```
-mv 2022-09-06-raspios-bullseye-arm64-lite.img Wombat-Bullseye.img
+cp 2022-09-22-raspios-bullseye-arm64.img master_os.img
 ```
 
 5. Mount the partitions
 
 ```
-sudo LOOP_NUM=$(losetup --show --find --partscan Wombat-Bullseye.img)
+sudo LOOP_NUM=$(losetup --show --find --partscan master_os.img)
 ```
 
 Note the loop number
@@ -88,7 +88,7 @@ sudo losetup --detach /dev/{$LOOP_NUM}
 9. Convert image to qcow2 format
 
 ```
-qemu-img convert -f raw -O qcow2 Wombat-Bullseye.img Wombat-Bullseye.qcow2
+qemu-img convert -f raw -O qcow2 master_os.img snapshot.qcow2
 ```
 
 10. Increase disk size to 8G (or whatever size your SD card is) using qemu-img 
@@ -104,13 +104,13 @@ qemu-img resize Wombat-Bullseye.qcow2 8G
 #!/usr/bin/env bash
 sudo qemu-system-aarch64 \
   -M raspi3b \
-  -m 1024M \
+  -m 1024 \
   -kernel build/firmware/boot/kernel8.img \
   -dtb build/firmware/boot/bcm2710-rpi-3-b.dtb \
-  -drive "format=qcow2,file=build/snapshot.qcow2" \
-  -append "console=ttyAMA0 root=/dev/mmcblk0p2 rw rootwait rootfstype=ext4 init=/bin/bash" \
-  -display 'none' \
-  -serial stdio tcp:127.0.0.1:4444
+  -drive "format=raw,file=build/master_os.img" \
+  -append "console=ttyAMA0 root=/dev/mmcblk0p2 rw rootwait rootfstype=ext4" \
+  -device usb-net,netdev=net0 -netdev user,id=net0,hostfwd=tcp::5555-:22 \
+  -serial stdio -usb -device usb-mouse -device usb-kbd
 ```
 
 12. Run Wombat_Start.sh
@@ -119,17 +119,7 @@ sudo qemu-system-aarch64 \
 ./Wombat_Start.sh
 ```
 
-13. After logging in enable ssh on bootup
-
-```
-sudo systemctl enable --now ssh.service
-```
-
-13. You can remain in this terminal or you can also connect locally
-
-```
-ssh kipr@127.0.0.1 -p 5555
-```
+13. Login to the image
 
 14. Run fdisk to recreate the second partition
 
@@ -159,9 +149,14 @@ p
 2
 ```
 
-Put in the starting sector of the old partition and enter to accept
+Put in the starting sector of the old partition
 ```
 xxxxx
+```
+
+Put in the end sector of the disk so that only 7 GB are used (this number may be different for a different SD card size)
+```
+15309209
 ```
 
 Answer no to changing ext4 signature
@@ -186,13 +181,15 @@ sudo resize2fs /dev/mmcblk0p2
 df -h
 ```
 
-18. Get updates now that there is enough space for them
+18. Exit the image and convert back to raw format
 
 ```
-sudo apt-get update
+sudo qemu-img convert -f qcow2 -O raw snapshot.qcow2 master_os.img
 ```
 
+19. Resize to 7 GB
+  
 ```
-sudo apt-get upgrade
+sudo qemu-img resize master_os.img --shrink 7G
 ```
 

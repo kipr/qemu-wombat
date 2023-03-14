@@ -6,7 +6,7 @@ from classes.qemuSocket import QemuSocket
 
 class Pass:
   """
-  Runs a qemu isntance in recovery mode and waits for the user to connect to the serial port.
+  Runs a qemu instance in recovery mode and waits for the user to connect to the serial port.
 
   The serial port is exposed via TCP on localhost:4444 or the port specified by the serial_tcp_port argument.
   """
@@ -53,3 +53,4 @@ class Pass:
     if self.commands != None:
       self.root.send_bulk(self.commands)
     self.root.send(Command('exit'))
+    p.kill()

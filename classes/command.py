@@ -29,4 +29,7 @@ class Command:
         self.buffer = buffer
         if self.buf_func != None:
             self.buf_func(self.buffer)
+
+    def get_command(self):
+        return self.command
     

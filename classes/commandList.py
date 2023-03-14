@@ -29,3 +29,11 @@ class CommandList:
         for command in self.commands:
             if command.store_used != '':
                 command.command = self.store[command.store_used]
+        
+    def get_commands(self):
+        print('Commands: ')
+        for command in self.commands:
+            print(command.get_command())
+
+    def clear(self):
+        self.commands = []

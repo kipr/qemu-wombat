@@ -62,8 +62,15 @@ class QemuSocket:
       time.sleep(1)
       print('\nExiting...')
       self.conn.close()
+      self.serial_tcp_sock.close()
+      time.sleep(1)
       return
     
+    if command_str == 'switch_user':
+      time.sleep(1)
+      print('\nSwitching user...')
+      root_string = 'kipr@raspberrypi:/ $'
+
     if command.alt_wait_string != '':
       self.alt_wait_string = command.alt_wait_string
 
